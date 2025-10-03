@@ -31,6 +31,10 @@ Telegram-агрегатор новостей - это система, котор
 │  │  Channel    │  │  Category   │  │    User Management      │ │
 │  │  Manager    │  │  Manager    │  │                         │ │
 │  └─────────────┘  └─────────────┘  └─────────────────────────┘ │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │              TELETHON MONITOR                               │ │
+│  │         (Real-time Channel Monitoring)                     │ │
+│  └─────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
                              │
 ┌─────────────────────────────────────────────────────────────────┐
@@ -115,6 +119,21 @@ Telegram-агрегатор новостей - это система, котор
   - JWT токены для веб-интерфейса
 - **Профили:** Настройки пользователя и его ботов
 - **Связи:** Привязка пользователя к его личному боту
+
+#### 6. **Telethon Monitor (Мониторинг каналов)**
+- **Назначение:** Мгновенное получение новых сообщений из каналов
+- **Принцип работы:** 
+  - Telethon работает как пользовательский клиент
+  - Подписывается на обновления всех каналов пользователей
+  - Получает сообщения в реальном времени через webhook
+- **Преимущества:**
+  - **Мгновенность** - сообщения приходят сразу после публикации
+  - **Эффективность** - не нужно постоянно опрашивать API
+  - **Масштабируемость** - один клиент может мониторить множество каналов
+- **Ограничения:**
+  - Требует авторизации пользователя (api_id, api_hash)
+  - Работает от имени пользователя, а не бота
+  - Нужно соблюдать лимиты Telegram API
 
 ## 🔄 Детальный механизм работы системы
 
@@ -674,20 +693,22 @@ async def inline_query_handler(inline_query: InlineQuery):
 
 ### 10. **Процесс работы системы**
 
-#### Ежедневный цикл:
-1. **Сбор новостей** (каждые 5 минут)
-   - Боты мониторят подписанные каналы
-   - Новые посты сохраняются в базу данных
+#### Реальное время (Webhook + Telethon):
+1. **Мониторинг каналов** (мгновенно)
+   - Telethon клиент подписан на обновления каналов
+   - Новые сообщения обрабатываются мгновенно
    - Автоматическая категоризация через ИИ
+   - Сохранение в базу данных
 
-2. **Обработка новостей** (каждые 15 минут)
+2. **Обработка новостей** (асинхронно)
    - Анализ тональности
    - Поиск дубликатов
    - Обновление статистики
+   - Отправка уведомлений пользователям
 
-3. **Уведомления** (по расписанию)
-   - Отправка ежедневных дайджестов
-   - Уведомления о важных новостях
+3. **Уведомления** (по событиям)
+   - Мгновенные уведомления о важных новостях
+   - Ежедневные дайджесты по расписанию
    - Персональные рекомендации
 
 #### Пользовательский сценарий:
@@ -733,6 +754,7 @@ async def inline_query_handler(inline_query: InlineQuery):
 
 **Backend (Python):**
 - **Bot Framework:** aiogram 3.x (асинхронный, современный)
+- **Channel Monitor:** Telethon (реальное время мониторинг каналов)
 - **Web Framework:** FastAPI (для Web App)
 - **База данных:** PostgreSQL + SQLAlchemy 2.0
 - **ИИ:** OpenAI API + transformers (локальные модели)
@@ -753,15 +775,112 @@ project_owl/
 ├── backend/            # Python бэкенд
 │   ├── main.py        # Главный файл
 │   ├── bots/          # Боты
+│   │   ├── main_bot.py    # Главный бот регистрации
+│   │   └── user_bot.py    # Личные боты пользователей
 │   ├── services/      # Сервисы
+│   │   ├── telethon_monitor.py  # Мониторинг каналов
+│   │   ├── news_processor.py    # Обработка новостей
+│   │   └── ai_service.py        # ИИ сервисы
 │   ├── models/        # Модели БД
-│   └── utils/         # Утилиты
+│   ├── utils/         # Утилиты
+│   └── config/        # Конфигурация
 ├── webapp/            # Web App
 │   ├── index.html     # Главная страница
 │   ├── css/           # Стили
 │   ├── js/            # JavaScript
 │   └── components/    # Vue компоненты
 └── requirements.txt   # Зависимости Python
+```
+
+**Пример Telethon монитора:**
+```python
+# backend/services/telethon_monitor.py
+from telethon import TelegramClient, events
+from telethon.tl.types import Channel
+import asyncio
+import logging
+
+class ChannelMonitor:
+    def __init__(self, api_id: int, api_hash: str, session_name: str):
+        self.client = TelegramClient(session_name, api_id, api_hash)
+        self.monitored_channels = set()
+        self.logger = logging.getLogger(__name__)
+    
+    async def start(self):
+        """Запуск мониторинга каналов"""
+        await self.client.start()
+        self.logger.info("Telethon monitor started")
+    
+    async def add_channel(self, channel_username: str, user_id: int):
+        """Добавление канала для мониторинга"""
+        try:
+            channel = await self.client.get_entity(channel_username)
+            if isinstance(channel, Channel):
+                self.monitored_channels.add((channel.id, user_id))
+                
+                # Регистрируем обработчик для этого канала
+                @self.client.on(events.NewMessage(chats=channel))
+                async def handler(event):
+                    await self.process_new_message(event, user_id)
+                
+                self.logger.info(f"Added channel {channel_username} for user {user_id}")
+        except Exception as e:
+            self.logger.error(f"Error adding channel {channel_username}: {e}")
+    
+    async def process_new_message(self, event, user_id: int):
+        """Обработка нового сообщения из канала"""
+        message = event.message
+        
+        # Сохраняем новость в базу данных
+        news_data = {
+            'channel_id': event.chat_id,
+            'message_id': message.id,
+            'content': message.text or '',
+            'media_urls': self.extract_media_urls(message),
+            'published_at': message.date,
+            'user_id': user_id
+        }
+        
+        # Отправляем на обработку
+        await self.send_to_processor(news_data)
+        
+        self.logger.info(f"Processed new message from channel {event.chat_id}")
+    
+    def extract_media_urls(self, message):
+        """Извлечение URL медиафайлов из сообщения"""
+        urls = []
+        if message.photo:
+            urls.append(f"photo_{message.photo.id}")
+        if message.video:
+            urls.append(f"video_{message.video.id}")
+        if message.document:
+            urls.append(f"document_{message.document.id}")
+        return urls
+    
+    async def send_to_processor(self, news_data: dict):
+        """Отправка данных на обработку"""
+        # Здесь можно отправить в очередь или напрямую в процессор
+        pass
+
+# Использование
+async def main():
+    monitor = ChannelMonitor(
+        api_id=YOUR_API_ID,
+        api_hash=YOUR_API_HASH,
+        session_name='news_monitor'
+    )
+    
+    await monitor.start()
+    
+    # Добавляем каналы для мониторинга
+    await monitor.add_channel('@meduzaproject', user_id=123)
+    await monitor.add_channel('@tass_agency', user_id=123)
+    
+    # Запускаем мониторинг
+    await monitor.client.run_until_disconnected()
+
+if __name__ == '__main__':
+    asyncio.run(main())
 ```
 
 **Преимущества:**
@@ -858,12 +977,13 @@ CREATE TABLE categories (
 ## 🚀 План разработки
 
 ### Этап 1: MVP (2-3 недели)
-- [ ] Настройка проекта (Python + aiogram + FastAPI)
+- [ ] Настройка проекта (Python + aiogram + Telethon + FastAPI)
 - [ ] Главный бот для регистрации
 - [ ] Система создания личных ботов
 - [ ] Базовая структура базы данных
+- [ ] Telethon монитор для каналов
 - [ ] Подписка на каналы через бота
-- [ ] Базовый сбор новостей
+- [ ] Мгновенный сбор новостей через Telethon
 
 ### Этап 2: Telegram интерфейсы (2-3 недели)
 - [ ] Inline Keyboard меню
