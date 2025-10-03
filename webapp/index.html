@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>News Aggregator</title>
+    <link href="https://cdn.jsdelivr.net/npm/vuetify@3.4.0/dist/vuetify.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@mdi/font@7.2.96/css/materialdesignicons.min.css" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Roboto', sans-serif;
+        }
+        .news-card {
+            margin-bottom: 16px;
+        }
+        .category-chip {
+            margin: 4px;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <v-app>
+            <v-app-bar color="primary" dark>
+                <v-app-bar-title>📰 News Aggregator</v-app-bar-title>
+                <v-spacer></v-spacer>
+                <v-btn icon @click="refreshData">
+                    <v-icon>mdi-refresh</v-icon>
+                </v-btn>
+            </v-app-bar>
+
+            <v-main>
+                <v-container fluid>
+                    <!-- Статистика -->
+                    <v-row class="mb-4">
+                        <v-col cols="12" sm="6" md="3">
+                            <v-card>
+                                <v-card-title class="text-h6">👥 Пользователей</v-card-title>
+                                <v-card-text class="text-h4">{{ stats.users_count || 0 }}</v-card-text>
+                            </v-card>
+                        </v-col>
+                        <v-col cols="12" sm="6" md="3">
+                            <v-card>
+                                <v-card-title class="text-h6">🤖 Ботов</v-card-title>
+                                <v-card-text class="text-h4">{{ stats.bots_count || 0 }}</v-card-text>
+                            </v-card>
+                        </v-col>
+                        <v-col cols="12" sm="6" md="3">
+                            <v-card>
+                                <v-card-title class="text-h6">📂 Каналов</v-card-title>
+                                <v-card-text class="text-h4">{{ stats.channels_count || 0 }}</v-card-text>
+                            </v-card>
+                        </v-col>
+                        <v-col cols="12" sm="6" md="3">
+                            <v-card>
+                                <v-card-title class="text-h6">📰 Новостей сегодня</v-card-title>
+                                <v-card-text class="text-h4">{{ stats.news_today || 0 }}</v-card-text>
+                            </v-card>
+                        </v-col>
+                    </v-row>
+
+                    <!-- Основной контент -->
+                    <v-row>
+                        <v-col cols="12" md="8">
+                            <v-card>
+                                <v-card-title>
+                                    <v-icon class="mr-2">mdi-newspaper</v-icon>
+                                    Последние новости
+                                </v-card-title>
+                                <v-card-text>
+                                    <div v-if="loading" class="loading">
+                                        <v-progress-circular indeterminate color="primary"></v-progress-circular>
+                                        <p class="mt-2">Загрузка новостей...</p>
+                                    </div>
+                                    <div v-else-if="news.length === 0" class="text-center pa-4">
+                                        <v-icon size="64" color="grey">mdi-newspaper-variant-outline</v-icon>
+                                        <p class="text-h6 mt-2">Новостей пока нет</p>
+                                        <p class="text-body-2">Добавьте каналы для получения новостей</p>
+                                    </div>
+                                    <div v-else>
+                                        <v-card 
+                                            v-for="item in news" 
+                                            :key="item.id" 
+                                            class="news-card"
+                                            elevation="2"
+                                        >
+                                            <v-card-text>
+                                                <div class="d-flex justify-space-between align-start mb-2">
+                                                    <h3 class="text-h6">{{ item.channel_title }}</h3>
+                                                    <small class="text-grey">{{ formatDate(item.published_at) }}</small>
+                                                </div>
+                                                <p class="text-body-1 mb-2">{{ item.content }}</p>
+                                                <div v-if="item.categories && item.categories.length > 0">
+                                                    <v-chip 
+                                                        v-for="category in item.categories" 
+                                                        :key="category.name"
+                                                        :color="category.color || 'primary'"
+                                                        size="small"
+                                                        class="category-chip"
+                                                    >
+                                                        {{ category.name }}
+                                                    </v-chip>
+                                                </div>
+                                            </v-card-text>
+                                        </v-card>
+                                    </div>
+                                </v-card-text>
+                            </v-card>
+                        </v-col>
+
+                        <v-col cols="12" md="4">
+                            <v-card>
+                                <v-card-title>
+                                    <v-icon class="mr-2">mdi-cog</v-icon>
+                                    Управление
+                                </v-card-title>
+                                <v-card-text>
+                                    <v-btn 
+                                        color="primary" 
+                                        block 
+                                        class="mb-2"
+                                        @click="showAddChannelDialog = true"
+                                    >
+                                        <v-icon left>mdi-plus</v-icon>
+                                        Добавить канал
+                                    </v-btn>
+                                    
+                                    <v-btn 
+                                        color="secondary" 
+                                        block 
+                                        class="mb-2"
+                                        @click="showCategoriesDialog = true"
+                                    >
+                                        <v-icon left>mdi-tag</v-icon>
+                                        Управление категориями
+                                    </v-btn>
+                                    
+                                    <v-btn 
+                                        color="success" 
+                                        block 
+                                        @click="generateSummary"
+                                    >
+                                        <v-icon left>mdi-robot</v-icon>
+                                        Создать саммари
+                                    </v-btn>
+                                </v-card-text>
+                            </v-card>
+
+                            <v-card class="mt-4">
+                                <v-card-title>
+                                    <v-icon class="mr-2">mdi-information</v-icon>
+                                    Информация
+                                </v-card-title>
+                                <v-card-text>
+                                    <p class="text-body-2">
+                                        Это MVP версия News Aggregator. 
+                                        Полный функционал доступен через Telegram бота.
+                                    </p>
+                                    <v-btn 
+                                        color="primary" 
+                                        variant="outlined" 
+                                        block 
+                                        class="mt-2"
+                                        href="https://t.me/your_main_bot"
+                                        target="_blank"
+                                    >
+                                        <v-icon left>mdi-telegram</v-icon>
+                                        Открыть в Telegram
+                                    </v-btn>
+                                </v-card-text>
+                            </v-card>
+                        </v-col>
+                    </v-row>
+                </v-container>
+            </v-main>
+
+            <!-- Диалог добавления канала -->
+            <v-dialog v-model="showAddChannelDialog" max-width="500">
+                <v-card>
+                    <v-card-title>Добавить канал</v-card-title>
+                    <v-card-text>
+                        <v-text-field
+                            v-model="newChannel"
+                            label="Имя канала (@channel_name)"
+                            placeholder="@meduzaproject"
+                            prepend-icon="mdi-at"
+                        ></v-text-field>
+                    </v-card-text>
+                    <v-card-actions>
+                        <v-spacer></v-spacer>
+                        <v-btn @click="showAddChannelDialog = false">Отмена</v-btn>
+                        <v-btn color="primary" @click="addChannel">Добавить</v-btn>
+                    </v-card-actions>
+                </v-card>
+            </v-dialog>
+
+            <!-- Диалог категорий -->
+            <v-dialog v-model="showCategoriesDialog" max-width="600">
+                <v-card>
+                    <v-card-title>Управление категориями</v-card-title>
+                    <v-card-text>
+                        <p class="text-body-2 mb-4">
+                            Категории помогают автоматически сортировать новости по темам.
+                        </p>
+                        <v-btn color="primary" @click="showAddCategoryDialog = true">
+                            <v-icon left>mdi-plus</v-icon>
+                            Добавить категорию
+                        </v-btn>
+                    </v-card-text>
+                    <v-card-actions>
+                        <v-spacer></v-spacer>
+                        <v-btn @click="showCategoriesDialog = false">Закрыть</v-btn>
+                    </v-card-actions>
+                </v-card>
+            </v-dialog>
+
+            <!-- Диалог добавления категории -->
+            <v-dialog v-model="showAddCategoryDialog" max-width="500">
+                <v-card>
+                    <v-card-title>Добавить категорию</v-card-title>
+                    <v-card-text>
+                        <v-text-field
+                            v-model="newCategory.name"
+                            label="Название категории"
+                            placeholder="Политика"
+                        ></v-text-field>
+                        <v-text-field
+                            v-model="newCategory.keywords"
+                            label="Ключевые слова (через запятую)"
+                            placeholder="выборы, президент, правительство"
+                        ></v-text-field>
+                        <v-color-picker
+                            v-model="newCategory.color"
+                            hide-mode-switch
+                        ></v-color-picker>
+                    </v-card-text>
+                    <v-card-actions>
+                        <v-spacer></v-spacer>
+                        <v-btn @click="showAddCategoryDialog = false">Отмена</v-btn>
+                        <v-btn color="primary" @click="addCategory">Добавить</v-btn>
+                    </v-card-actions>
+                </v-card>
+            </v-dialog>
+
+            <!-- Снэкбар для уведомлений -->
+            <v-snackbar
+                v-model="snackbar.show"
+                :color="snackbar.color"
+                :timeout="3000"
+            >
+                {{ snackbar.message }}
+                <template v-slot:actions>
+                    <v-btn @click="snackbar.show = false">Закрыть</v-btn>
+                </template>
+            </v-snackbar>
+        </v-app>
+    </div>
+
+    <!-- Vue.js и Vuetify -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vuetify@3.4.0/dist/vuetify.min.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
