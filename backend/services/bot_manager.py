@@ -23,29 +23,26 @@ class BotManager:
         self.botfather_url = "https://api.telegram.org/bot"
         self.botfather_token = settings.main_bot_token  # Используем токен главного бота
     
-    async def create_user_bot(self, user_id: int, user_name: str) -> Optional[Dict[str, Any]]:
+    async def assign_bot_to_user(self, user_id: int, user_name: str) -> Optional[Dict[str, Any]]:
         """
-        Создание личного бота для пользователя
+        Назначение бота из пула пользователю
         
         Args:
             user_id: ID пользователя
             user_name: Имя пользователя
             
         Returns:
-            Информация о созданном боте или None при ошибке
+            Информация о назначенном боте или None при ошибке
         """
         try:
-            # Генерируем имя бота
-            bot_username = f"{settings.bot_username_prefix}{user_id}_{user_name.lower().replace(' ', '')}"
-            
-            # Создаем бота через BotFather API
-            bot_info = await self._create_bot_via_botfather(bot_username, user_name)
+            # Получаем свободного бота из пула
+            bot_info = await self._get_available_bot_from_pool()
             
             if not bot_info:
-                logger.error(f"Failed to create bot for user {user_id}")
+                logger.error(f"No available bots in pool for user {user_id}")
                 return None
             
-            # Сохраняем информацию о боте в базу данных
+            # Сохраняем информацию о назначении в базу данных
             async for db in get_db():
                 user_bot = UserBot(
                     user_id=user_id,
@@ -57,7 +54,7 @@ class BotManager:
                 await db.commit()
                 await db.refresh(user_bot)
                 
-                logger.info(f"Created bot {bot_info['username']} for user {user_id}")
+                logger.info(f"Assigned bot {bot_info['username']} to user {user_id}")
                 return {
                     'id': user_bot.id,
                     'username': bot_info['username'],
@@ -65,34 +62,30 @@ class BotManager:
                 }
                 
         except Exception as e:
-            logger.error(f"Error creating bot for user {user_id}: {e}")
+            logger.error(f"Error assigning bot to user {user_id}: {e}")
             return None
     
-    async def _create_bot_via_botfather(self, username: str, display_name: str) -> Optional[Dict[str, Any]]:
+    async def _get_available_bot_from_pool(self) -> Optional[Dict[str, Any]]:
         """
-        Создание бота через BotFather API
+        Получение свободного бота из пула
         
-        Args:
-            username: Имя пользователя бота
-            display_name: Отображаемое имя
-            
         Returns:
-            Информация о боте или None при ошибке
+            Информация о свободном боте или None если пул пуст
         """
         try:
-            # В реальной реализации здесь был бы вызов BotFather API
-            # Для MVP используем заглушку
-            logger.info(f"Creating bot {username} with display name {display_name}")
+            # Получаем свободного бота из пула предварительно созданных ботов
+            # В реальной реализации здесь будет запрос к базе данных
+            logger.info("Getting available bot from pool")
             
-            # Заглушка - в реальности нужно вызывать BotFather API
+            # Заглушка - в реальности нужно получать из базы данных
             return {
-                'username': username,
-                'token': f"123456789:ABCdefGHIjklMNOpqrsTUVwxyz{username}",
-                'display_name': display_name
+                'username': f"userbot_{user_id}",
+                'token': f"123456789:ABCdefGHIjklMNOpqrsTUVwxyz{user_id}",
+                'display_name': f"User Bot {user_id}"
             }
             
         except Exception as e:
-            logger.error(f"Error creating bot via BotFather: {e}")
+            logger.error(f"Error getting bot from pool: {e}")
             return None
     
     async def get_user_bot(self, user_id: int) -> Optional[UserBot]:
