@@ -4,11 +4,13 @@
 
 ### **1. Подготовка VPS**
 
-#### **Автоматическая настройка:**
+#### **Автоматическая настройка (только для публичных репозиториев):**
 ```bash
 # Скачиваем и запускаем скрипт настройки
-curl -fsSL https://raw.githubusercontent.com/rdeword/project_owl/main/setup-vps.sh | bash
+curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/project_owl/main/setup-vps.sh | bash
 ```
+
+**⚠️ Для приватного репозитория используйте ручную настройку ниже!**
 
 #### **Ручная настройка:**
 ```bash
@@ -28,12 +30,37 @@ sudo chmod +x /usr/local/bin/docker-compose
 sudo apt install git -y
 ```
 
-### **2. Развертывание проекта**
+### **2. Настройка доступа к приватному репозиторию**
+
+#### **Вариант 1: SSH ключи (рекомендуется)**
+```bash
+# Генерация SSH ключа (если еще нет)
+ssh-keygen -t ed25519 -C "your_email@example.com"
+
+# Копирование публичного ключа
+cat ~/.ssh/id_ed25519.pub
+
+# Добавьте этот ключ в GitHub: Settings → SSH and GPG keys → New SSH key
+```
+
+#### **Вариант 2: Personal Access Token**
+```bash
+# Создайте токен в GitHub: Settings → Developer settings → Personal access tokens
+# Выберите scopes: repo (полный доступ к репозиториям)
+
+# Клонирование с токеном
+git clone https://YOUR_TOKEN@github.com/YOUR_USERNAME/project_owl.git
+```
+
+### **3. Развертывание проекта**
 
 #### **Полное развертывание:**
 ```bash
-# Клонирование репозитория
-git clone https://github.com/rdeword/project_owl.git
+# Клонирование репозитория (выберите один из вариантов выше)
+git clone git@github.com:YOUR_USERNAME/project_owl.git
+# ИЛИ
+git clone https://YOUR_TOKEN@github.com/YOUR_USERNAME/project_owl.git
+
 cd project_owl
 
 # Настройка прав
@@ -47,6 +74,73 @@ chmod +x deploy.sh quick-deploy.sh setup-vps.sh
 ```bash
 # Для обновления кода без полной пересборки
 ./quick-deploy.sh
+```
+
+## 🔐 Настройка приватного репозитория
+
+### **Подробная инструкция для приватного GitHub репозитория:**
+
+#### **1. Создание SSH ключа (рекомендуемый способ):**
+```bash
+# Генерация нового SSH ключа
+ssh-keygen -t ed25519 -C "your_email@example.com"
+
+# Запуск SSH агента
+eval "$(ssh-agent -s)"
+
+# Добавление ключа в SSH агент
+ssh-add ~/.ssh/id_ed25519
+
+# Копирование публичного ключа
+cat ~/.ssh/id_ed25519.pub
+```
+
+#### **2. Добавление SSH ключа в GitHub:**
+1. Перейдите в GitHub → Settings → SSH and GPG keys
+2. Нажмите "New SSH key"
+3. Вставьте скопированный публичный ключ
+4. Сохраните
+
+#### **3. Тестирование SSH соединения:**
+```bash
+# Проверка соединения с GitHub
+ssh -T git@github.com
+
+# Должно появиться: "Hi username! You've successfully authenticated..."
+```
+
+#### **4. Альтернатива: Personal Access Token**
+```bash
+# Создание токена в GitHub:
+# Settings → Developer settings → Personal access tokens → Tokens (classic)
+# Выберите scopes: repo (Full control of private repositories)
+
+# Сохранение токена в переменной окружения
+export GITHUB_TOKEN="your_token_here"
+
+# Клонирование с токеном
+git clone https://$GITHUB_TOKEN@github.com/YOUR_USERNAME/project_owl.git
+```
+
+#### **5. Настройка Git для приватного репозитория:**
+```bash
+# Настройка пользователя Git
+git config --global user.name "Your Name"
+git config --global user.email "your_email@example.com"
+
+# Настройка сохранения учетных данных
+git config --global credential.helper store
+```
+
+#### **6. Автоматическая настройка (рекомендуется):**
+```bash
+# Запуск интерактивного скрипта настройки
+./setup-private-repo.sh
+
+# Скрипт автоматически:
+# - Настроит SSH ключи или токен
+# - Обновит скрипты развертывания
+# - Протестирует доступ к репозиторию
 ```
 
 ## 🔧 Настройка конфигурации
@@ -106,6 +200,9 @@ MAX_COMMAND_LENGTH=256  # символов в команде
 ### **Основные команды:**
 
 ```bash
+# Настройка приватного репозитория (первый раз)
+./setup-private-repo.sh
+
 # Полное развертывание
 ./deploy.sh
 
@@ -126,6 +223,9 @@ docker-compose restart
 
 # Обновление кода
 git pull origin main && ./quick-deploy.sh
+
+# Для приватного репозитория с токеном
+git pull https://YOUR_TOKEN@github.com/YOUR_USERNAME/project_owl.git main && ./quick-deploy.sh
 ```
 
 ### **Полезные команды Docker:**
@@ -270,6 +370,23 @@ grep -E "BOT_TOKEN|API_ID|API_HASH" .env
 docker-compose logs app | grep -i telegram
 ```
 
+#### **5. Проблемы с приватным репозиторием:**
+```bash
+# Проверка SSH соединения
+ssh -T git@github.com
+
+# Проверка токена
+echo $GITHUB_TOKEN
+
+# Проверка настроек Git
+git config --list | grep user
+
+# Тестирование доступа к репозиторию
+git ls-remote git@github.com:YOUR_USERNAME/project_owl.git
+# ИЛИ
+git ls-remote https://$GITHUB_TOKEN@github.com/YOUR_USERNAME/project_owl.git
+```
+
 ### **Полная переустановка:**
 
 ```bash
@@ -283,7 +400,9 @@ docker system prune -a
 rm -rf /home/newsbot/project_owl
 
 # Повторное развертывание
-git clone https://github.com/rdeword/project_owl.git
+git clone git@github.com:YOUR_USERNAME/project_owl.git
+# ИЛИ для токена
+git clone https://YOUR_TOKEN@github.com/YOUR_USERNAME/project_owl.git
 cd project_owl
 ./deploy.sh
 ```

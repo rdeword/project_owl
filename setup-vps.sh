@@ -88,3 +88,4 @@ echo -e "${YELLOW}1. Переключитесь на пользователя ne
 echo -e "${YELLOW}2. Перейдите в директорию: cd /home/newsbot/project_owl${NC}"
 echo -e "${YELLOW}3. Запустите развертывание: ./deploy.sh${NC}"
 echo -e "${YELLOW}4. Настройте .env файл с вашими токенами${NC}"
+

@@ -16,11 +16,31 @@ NC='\033[0m' # No Color
 BRANCH=${1:-main}
 ENVIRONMENT=${2:-production}
 PROJECT_DIR="/home/newsbot/project_owl"
-REPO_URL="https://github.com/rdeword/project_owl.git"
+
+# Настройка репозитория (замените на ваш)
+GITHUB_USERNAME="YOUR_USERNAME"
+GITHUB_REPO="project_owl"
+
+# Автоматическое определение URL репозитория
+if [ -n "$GITHUB_TOKEN" ]; then
+    REPO_URL="https://$GITHUB_TOKEN@github.com/$GITHUB_USERNAME/$GITHUB_REPO.git"
+elif [ -f ~/.ssh/id_ed25519 ] || [ -f ~/.ssh/id_rsa ]; then
+    REPO_URL="git@github.com:$GITHUB_USERNAME/$GITHUB_REPO.git"
+else
+    REPO_URL="https://github.com/$GITHUB_USERNAME/$GITHUB_REPO.git"
+fi
 
 echo -e "${BLUE}🚀 Начинаем развертывание проекта...${NC}"
 echo -e "${YELLOW}Ветка: ${BRANCH}${NC}"
 echo -e "${YELLOW}Окружение: ${ENVIRONMENT}${NC}"
+echo -e "${YELLOW}Репозиторий: ${REPO_URL}${NC}"
+
+# Проверка настройки репозитория
+if [ "$GITHUB_USERNAME" = "YOUR_USERNAME" ]; then
+    echo -e "${RED}⚠️  ВНИМАНИЕ: Необходимо настроить GITHUB_USERNAME в скрипте!${NC}"
+    echo -e "${YELLOW}Отредактируйте файл deploy.sh и замените YOUR_USERNAME на ваш GitHub username${NC}"
+    exit 1
+fi
 
 # Функция для логирования
 log() {
